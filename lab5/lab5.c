@@ -33,7 +33,7 @@ int count = 0;
 
 // thread 1 func
 void* receive_info() {
-	// update new cost in cost matrix
+	// receive and write to cost table
 	pthread_mutex_lock(&count_mutex);
 	count++;
 	pthread_mutex_unlock(&count_mutex);
@@ -42,6 +42,7 @@ void* receive_info() {
 
 // thread 3 func
 void* link_state() {
+	// read cost table, compute least costs, output least cost array for current node
 	pthread_mutex_lock(&count_mutex);
 	count++;
 	pthread_mutex_unlock(&count_mutex);
@@ -76,6 +77,7 @@ main (int argc, char *argv[]) {
 	}
 	
 	int i, j, in = 0;
+
 	// parse cost and host matrices
 	while (!feof(cost) && i < atoi(argv[2])) {
 		if (j >= 3) {
@@ -102,10 +104,33 @@ main (int argc, char *argv[]) {
 	}
 	fclose(hosts);
 
-	// message to all other machines
+	// message to all other machines (when?)
+	struct sockaddr_in serverAddr; 
+	socklen_t addr_size;
+	int sock;
+	for (i = 0; i < atoi(argv[2]); i++) {
+		if ( i != atoi(argv[1]) ) {
+			// message (data, array of 3 ints:<routers'id><neighbor id><new cost>
+			int msg[3] = {atoi(argv[1]), i, 1}; // last element read from keyboard input
 
+			// configure address (1: portnum, 2: server ip address)
+			serverAddr.sin_family = AF_INET;
+			serverAddr.sin_port = htons (myMachines[i].port); // 2nd arg: dest port
+			inet_pton (AF_INET, myMachines[i].IP, &serverAddr.sin_addr.s_addr); // 3rd arg: dest address
+			memset (serverAddr.sin_zero, '\0', sizeof (serverAddr.sin_zero));  
+			addr_size = sizeof serverAddr;
 
-	// threads 1 and 3
+			// Create socket
+			if ((sock = socket (PF_INET, SOCK_DGRAM, 0)) == -1) printf("Error creating socket\n");
+
+			// send messages
+			printf ("Sending...\n");
+			while (sendto (sock, &msg, sizeof(msg), 0, (struct sockaddr *)&serverAddr, addr_size) == -1) printf("Sending failed. Please restart\n");
+			printf ("Packet sent.\n");	
+		}
+	}
+
+	// threads 1 and 3; these threads should take in cost matrix as argument
 	int rc1, rc3;
 	pthread_t thread1, thread3;
 	
@@ -121,6 +146,8 @@ main (int argc, char *argv[]) {
 
 	pthread_join(thread1, NULL);
 	pthread_join(thread3, NULL);
+
+	
 
 	return 0;	
 }
