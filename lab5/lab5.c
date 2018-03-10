@@ -30,24 +30,23 @@ struct machine {
 
 pthread_mutex_t myMutex;
 
-int count = 0;
 
 // thread 1 func
 void* receive_info() {
-	// receive and write to cost table
 	pthread_mutex_lock(&myMutex);
-	count++;
+
+	// receive and write to cost table
 	pthread_mutex_unlock(&myMutex);
-	printf("Count: %d\n", count);
+
 }
 
 // thread 3 func
 void* link_state() {
 	// read cost table, compute least costs, output least cost array for current node
 	pthread_mutex_lock(&myMutex);
-	count++;
+
 	pthread_mutex_unlock(&myMutex);
-	printf("Count: %d\n", count);
+
 }
 
 
@@ -79,10 +78,6 @@ main (int argc, char *argv[]) {
 	{
 		printf("Thread creation failed: %d\n", rc3);
 	}
-
-	
-	// count initialization
-	int count = 0;
 
 	if (argc != 5) {
 		printf("Usage: <executable><current router id><number of nodes in graph><cost file name><host file name>\n");
@@ -127,50 +122,59 @@ main (int argc, char *argv[]) {
 	}
 	fclose(hosts);
 
+	printf("Cost table looks like this:\n");
 	printHelp(atoi(argv[2]), atoi(argv[2]), cmat);
 
-	// takes keyboard input
-	int snode, ncost;
-	printf("Enter the destination node(0-4) and a new cost to that node(<node><cost>): ");
-	scanf("%d %d", &snode, &ncost);
-	printHelp(atoi(argv[2]), atoi(argv[2]), cmat);
+	int count = 0;
+	while (count < 3) {
+		// takes keyboard input
+		int snode, ncost;
+		printf("Enter the destination node(0-3) and a new cost to that node(<node><cost>): ");
+		scanf("%d %d", &snode, &ncost);
+		printHelp(atoi(argv[2]), atoi(argv[2]), cmat);
 
-	// convert message 
-	int msg[3] = {atoi(argv[1]), snode, ncost}; 
-	int msgToSend[3];
-	for (i = 0; i < 3; ++i) msgToSend[i] = htonl(msg[i]);
+		// update table
+		cmat[atoi(argv[1])][snode] = ncost;
+		cmat[snode][atoi(argv[1])] = ncost;
 
-	// --------------sending message--------------
-	struct sockaddr_in serverAddr; 
-	socklen_t addr_size;
-	int sock;
+		// prepare message 
+		int msg[3] = {atoi(argv[1]), snode, ncost}; 
+		int msgToSend[3];
+		for (i = 0; i < 3; ++i) msgToSend[i] = htonl(msg[i]);
 
-	// configure address (1: portnum, 2: server ip address)
-	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_port = htons (myMachines[snode].port); 
-	inet_pton (AF_INET, myMachines[snode].IP, &serverAddr.sin_addr.s_addr); // 3rd arg: dest address
-	memset (serverAddr.sin_zero, '\0', sizeof (serverAddr.sin_zero));  
-	addr_size = sizeof serverAddr;
+		// --------------sending message--------------
+		struct sockaddr_in serverAddr; 
+		socklen_t addr_size;
+		int sock;
 
-	// Create socket
-	if ((sock = socket (PF_INET, SOCK_DGRAM, 0)) == -1) printf("Error creating socket\n");
+		// configure address (1: portnum, 2: server ip address)
+		serverAddr.sin_family = AF_INET;
+		serverAddr.sin_port = htons (myMachines[snode].port); 
+		inet_pton (AF_INET, myMachines[snode].IP, &serverAddr.sin_addr.s_addr); // 3rd arg: dest address
+		memset (serverAddr.sin_zero, '\0', sizeof (serverAddr.sin_zero));  
+		addr_size = sizeof serverAddr;
 
-	if ((bind(sfd, (struct sockaddr *) &serverAddr, sizeof(serverAddr))) == -1) printf("Error binding\n");
+		// Create socket
+		if ((sock = socket (PF_INET, SOCK_DGRAM, 0)) == -1) printf("Error creating socket\n");
 
-	printf("Config success, socket created, addr binded\n");
+		if ((bind(sfd, (struct sockaddr *) &serverAddr, sizeof(serverAddr))) == -1) printf("Error binding\n");
 
-	// send messages
-	printf ("Sending...\n");
-	while (sendto (sock, &msgToSend, sizeof(msgToSend), 0, (struct sockaddr *)&serverAddr, addr_size) == -1) printf("Sending failed. Please restart\n");
-	printf ("Packet sent.\n");
-	count++;	
+		printf("Config success, socket created, addr binded\n");
+
+		// send messages
+		printf ("Sending...\n");
+		while (sendto (sock, &msgToSend, sizeof(msgToSend), 0, (struct sockaddr *)&serverAddr, addr_size) == -1) printf("Sending failed. Please restart\n");
+		printf ("Packet sent.\n");
+		count++;
+
+	}	
 
 	// receive info at other machine receiving this input and updating...
 
 	pthread_join(thread1, NULL);
 	pthread_join(thread3, NULL);
 
-	// when count = 2, wait 30 sec and finish
+	// wait 30 sec and finish here
 	
 
 	return 0;	
