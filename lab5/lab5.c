@@ -28,25 +28,35 @@ struct machine {
 	int port;
 };
 
-pthread_mutex_t count_mutex;
+pthread_mutex_t myMutex;
+
 int count = 0;
 
 // thread 1 func
 void* receive_info() {
 	// receive and write to cost table
-	pthread_mutex_lock(&count_mutex);
+	pthread_mutex_lock(&myMutex);
 	count++;
-	pthread_mutex_unlock(&count_mutex);
+	pthread_mutex_unlock(&myMutex);
 	printf("Count: %d\n", count);
 }
 
 // thread 3 func
 void* link_state() {
 	// read cost table, compute least costs, output least cost array for current node
-	pthread_mutex_lock(&count_mutex);
+	pthread_mutex_lock(&myMutex);
 	count++;
-	pthread_mutex_unlock(&count_mutex);
+	pthread_mutex_unlock(&myMutex);
 	printf("Count: %d\n", count);
+}
+
+
+void printHelp (int row, int col, int cmat[][col]) {
+	int i, j;
+	for (i = 0; i < row; i++) {
+		for (j = 0; j < col; j++) printf("%d ", cmat[i][j]);
+		printf("\n");
+	}
 }
 
 // main thread function
@@ -55,6 +65,21 @@ main (int argc, char *argv[]) {
 	// initialize cost and hosts matrices
 	struct machine myMachines[4];
 	int cmat[atoi(argv[2])][atoi(argv[2])];
+
+	// initialize threads 1 and 3; these threads should take in cost matrix as argument
+	int rc1, rc3;
+	pthread_t thread1, thread3;
+	
+	if( rc1 = pthread_create( &thread1, NULL, &receive_info, NULL) )
+	{
+		printf("Thread creation failed: %d\n", rc1);
+	}
+
+	if( rc3 = pthread_create( &thread3, NULL, &link_state, NULL) )
+	{
+		printf("Thread creation failed: %d\n", rc3);
+	}
+
 	
 	// count initialization
 	int count = 0;
@@ -63,7 +88,8 @@ main (int argc, char *argv[]) {
 		printf("Usage: <executable><current router id><number of nodes in graph><cost file name><host file name>\n");
 		return 1;
 	}
-	// open files
+
+	// parse files
 	FILE* cost = fopen(argv[3], "rw");
 	if (cost == NULL) {
 		printf("Can't open output file!\n");
@@ -77,17 +103,14 @@ main (int argc, char *argv[]) {
 	}
 	
 	int i, j, in = 0;
-
-	// parse cost and host matrices
-	while (!feof(cost) && i < atoi(argv[2])) {
-		if (j >= 3) {
-			j = 0;
-			i++;		
+	for (i = 0; i < atoi(argv[2]); i++) {
+		for (j = 0; j < atoi(argv[2]); j++) {
+			printf("%d ", in);
+			fscanf(cost, "%d", &in);
+			cmat[i][j] = in;
 		}
-		printf("%d", in);
-		fscanf(cost, "%d", &in);
-		cmat[i][j++] = in;
 	}
+
 	fclose(cost);
 
 	int m, portn = 0;
@@ -104,49 +127,50 @@ main (int argc, char *argv[]) {
 	}
 	fclose(hosts);
 
-	// message to all other machines (when?)
+	printHelp(atoi(argv[2]), atoi(argv[2]), cmat);
+
+	// takes keyboard input
+	int snode, ncost;
+	printf("Enter the destination node(0-4) and a new cost to that node(<node><cost>): ");
+	scanf("%d %d", &snode, &ncost);
+	printHelp(atoi(argv[2]), atoi(argv[2]), cmat);
+
+	// convert message 
+	int msg[3] = {atoi(argv[1]), snode, ncost}; 
+	int msgToSend[3];
+	for (i = 0; i < 3; ++i) msgToSend[i] = htonl(msg[i]);
+
+	// --------------sending message--------------
 	struct sockaddr_in serverAddr; 
 	socklen_t addr_size;
 	int sock;
-	for (i = 0; i < atoi(argv[2]); i++) {
-		if ( i != atoi(argv[1]) ) {
-			// message (data, array of 3 ints:<routers'id><neighbor id><new cost>
-			int msg[3] = {atoi(argv[1]), i, 1}; // last element read from keyboard input
 
-			// configure address (1: portnum, 2: server ip address)
-			serverAddr.sin_family = AF_INET;
-			serverAddr.sin_port = htons (myMachines[i].port); // 2nd arg: dest port
-			inet_pton (AF_INET, myMachines[i].IP, &serverAddr.sin_addr.s_addr); // 3rd arg: dest address
-			memset (serverAddr.sin_zero, '\0', sizeof (serverAddr.sin_zero));  
-			addr_size = sizeof serverAddr;
+	// configure address (1: portnum, 2: server ip address)
+	serverAddr.sin_family = AF_INET;
+	serverAddr.sin_port = htons (myMachines[snode].port); 
+	inet_pton (AF_INET, myMachines[snode].IP, &serverAddr.sin_addr.s_addr); // 3rd arg: dest address
+	memset (serverAddr.sin_zero, '\0', sizeof (serverAddr.sin_zero));  
+	addr_size = sizeof serverAddr;
 
-			// Create socket
-			if ((sock = socket (PF_INET, SOCK_DGRAM, 0)) == -1) printf("Error creating socket\n");
+	// Create socket
+	if ((sock = socket (PF_INET, SOCK_DGRAM, 0)) == -1) printf("Error creating socket\n");
 
-			// send messages
-			printf ("Sending...\n");
-			while (sendto (sock, &msg, sizeof(msg), 0, (struct sockaddr *)&serverAddr, addr_size) == -1) printf("Sending failed. Please restart\n");
-			printf ("Packet sent.\n");	
-		}
-	}
+	if ((bind(sfd, (struct sockaddr *) &serverAddr, sizeof(serverAddr))) == -1) printf("Error binding\n");
 
-	// threads 1 and 3; these threads should take in cost matrix as argument
-	int rc1, rc3;
-	pthread_t thread1, thread3;
-	
-	if( rc1 = pthread_create( &thread1, NULL, &receive_info, NULL) )
-	{
-		printf("Thread creation failed: %d\n", rc1);
-	}
+	printf("Config success, socket created, addr binded\n");
 
-	if( rc3 = pthread_create( &thread3, NULL, &link_state, NULL) )
-	{
-		printf("Thread creation failed: %d\n", rc3);
-	}
+	// send messages
+	printf ("Sending...\n");
+	while (sendto (sock, &msgToSend, sizeof(msgToSend), 0, (struct sockaddr *)&serverAddr, addr_size) == -1) printf("Sending failed. Please restart\n");
+	printf ("Packet sent.\n");
+	count++;	
+
+	// receive info at other machine receiving this input and updating...
 
 	pthread_join(thread1, NULL);
 	pthread_join(thread3, NULL);
 
+	// when count = 2, wait 30 sec and finish
 	
 
 	return 0;	
