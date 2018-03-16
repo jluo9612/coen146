@@ -50,7 +50,6 @@ void printHelp (int row, int col, int cmat[][col]) {
 
 // thread 1 fu
 void* receive_info(void* ind) {
-	int ct = 0;
 	int sock;
 	// init server
 	struct sockaddr_in serverAddr, clientAddr;
@@ -76,7 +75,9 @@ void* receive_info(void* ind) {
 		}
 		
 		int i;
-		for (i = 0 ; i < 3 ; ++i) array[i] = ntohl(arrayReceived[i]);
+		for (i = 0 ; i < 3 ; ++i) {
+			array[i] = ntohl(arrayReceived[i]);
+		}
 		printf ( "Received cost: %d\n", array[2] );
 
 		pthread_mutex_lock(&myMutex);
@@ -100,26 +101,29 @@ void* link_state(void* ind) {
 	while (1) {
 		pthread_mutex_lock(&myMutex);
 		int i;
-		int min; 
+		int min = 0; 
 		// initiating least cost array and visited array
 		for (i = 0; i < 4; i++) { 
 			lc[i] = cmat[myind][i];
+			// printf( "Initial lc: %d\n", lc[i] );
 			visited[i] = false;
-			if (i != myind) min = lc[i]; // min is initiated to distance to one of other nodes
+			if (i != myind) {
+				min = lc[i]; // min is initiated to distance to one of other nodes
+			}
 		}
 		visited[myind] = true; 
-		
-	  	// a for loop?
 		int closest = 0;
+
 		// finding closest node
 		for (i = 0; i < 4; i++) { 
-			if (lc[i] != 0 && lc[i] < min) { // if i != self and lc[i] < min)
+			if (lc[i] != 0 && lc[i] <= min) { // if i != self and lc[i] < min)
 				min = lc[i];
 				closest = i;
 			}
 		}
+		// printf ( "min: %d\n", min );
 
-		printf("Closest: %d, distance from myind %d\n", closest, min);
+		// printf("%d is closest to %d with dist: %d\n", myind, closest, min);
 		visited[closest] = true; // closest direct node visited
 
 		// finding least cost path
@@ -134,6 +138,7 @@ void* link_state(void* ind) {
 		pthread_mutex_unlock(&myMutex);
 		// print least costs
 		for (i = 0; i < 4; i++) printf( "Least cost from %d to %d is: %d now \n", myind, i, lc[i]);
+		printf ( "One cycle completes. \n\n" );
 
 		// sleep 10-20 here
 		int s = rand () % 11 + 10;
@@ -208,56 +213,63 @@ main (int argc, char *argv[]) {
 	int sock;
 	if ((sock = socket (PF_INET, SOCK_DGRAM, 0)) == -1) printf("Error creating socket\n");
 
-	int ma;
-	for (ma = 0; ma < 4; ma++) printf( "Machine %s: %s %d\n", myMachines[ma].name, myMachines[ma].IP, myMachines[ma].port );
+	// int ma;
+	// for (ma = 0; ma < 4; ma++) printf( "Machine %s: %s %d\n", myMachines[ma].name, myMachines[ma].IP, myMachines[ma].port );
 
-	while (1) {
-
+	while (ct < 2) {
+		ct++;
 		// takes keyboard input
 		int snode = 0;
 		int ncost = 0;
-		printf("Enter the destination node(0-3) and a new cost to that node(<node><cost>): ");
+		int i;
+		printf("Enter a new cost to a node(<node><cost>):\n ");
 		scanf("%d %d", &snode, &ncost);
 
 		while (snode > 3) {
-			printf("Destination node doesn't exist! Please reenter node: ");
+			printf("Destination node doesn't exist! Please reenter node: \n");
 			scanf("%d %d", &snode, &ncost);
 		} 
 
-		// main thread not allowed to update cost table
-		if (snode != atoi(argv[1])) {
+		while (snode == atoi(argv[1])) {
+			printf("Please enter a node other than myself! : \n");
+			scanf("%d %d", &snode, &ncost);
+		}
+
+		// broadcast to all nodes's receive thread
+		for (i = 0; i < 4; i++) {
 			// prepare message 
 			int msg[3] = {atoi(argv[1]), snode, ncost}; 
 			int msgToSend[3];
-			for (i = 0; i < 3; ++i) msgToSend[i] = htonl(msg[i]);
+			int j;
+			for (j = 0; j < 3; ++j) msgToSend[j] = htonl(msg[j]);
 
 			// Config for destination
 			struct sockaddr_in serverAddr; 
 			socklen_t addr_size;
 			serverAddr.sin_family = AF_INET;
-			serverAddr.sin_port = htons (myMachines[snode].port); 
-			printf ( "Sending to port: %d\n", myMachines[snode].port );
-			inet_pton (AF_INET, myMachines[snode].IP, &serverAddr.sin_addr.s_addr); // 3rd arg: dest address
+			serverAddr.sin_port = htons (myMachines[i].port); 
+			printf ( "Sending to port: %d\n", myMachines[i].port );
+			inet_pton (AF_INET, myMachines[i].IP, &serverAddr.sin_addr.s_addr); // 3rd arg: dest address
 			memset (serverAddr.sin_zero, '\0', sizeof (serverAddr.sin_zero));  
 			addr_size = sizeof(serverAddr);
 			printf("Receiver config complete. Ready to send message. \n");
 
 			// send messages
 			printf ("Sending...\n");
-			printf ( "Sending %d\n", msg[2]);
+			for (j = 0; j < 3; j++) printf ( "Sending %d\n", msg[j]);
 			if (sendto (sock, &msgToSend, sizeof(msgToSend), 0, (struct sockaddr *)&serverAddr, addr_size) == -1) printf("Sending failed. Restarting\n");
 			printf ("Packet sent.\n");
 		}
-		ct++;
 		printf( "Count: %d\n", ct );
 		printf("Cost table looks like this now:\n");
 		printHelp(ROW, COL, cmat);
-		sleep(2);
 	}	
 
 	// main thread waits 30 sec and finish here
-	pthread_join(thread1, NULL);
-	pthread_join(thread3, NULL);
+	sleep(2);
+	// pthread_exit(NULL);
+	// pthread_join(thread1, NULL);
+	// pthread_join(thread3, NULL);
 
 	return 0;	
 }
