@@ -57,10 +57,9 @@ void* receive_info(void* ind) {
 	struct sockaddr_storage serverStorage;
 	socklen_t addr_size, client_addr_size;
 
-	int myind = (int) ind;
+	int myind = (uintptr_t) ind;
 	serverAddr.sin_family = AF_INET;
 	serverAddr.sin_port = htons ( (short) myMachines[myind].port );
-	// printf ( "Receiving port: %d\n", myMachines[myind].port );
 	serverAddr.sin_addr.s_addr = htonl (INADDR_ANY);
 	memset ((char *)serverAddr.sin_zero, '\0', sizeof (serverAddr.sin_zero));  
 	addr_size = sizeof (serverStorage);
@@ -93,7 +92,7 @@ void* receive_info(void* ind) {
 
 // thread 3 func
 void* link_state(void* ind) {
-	int myind = (int) ind; //0
+	int myind = (uintptr_t) ind; //0
 	bool visited[4];
 	visited[myind] = true; 
 	int lc[4];
@@ -119,7 +118,7 @@ void* link_state(void* ind) {
 			}
 		}
 
-		printf("Closest: %d, distance from myind %d\n", i, min);
+		printf("Closest: %d, distance from myind %d\n", closest, min);
 		visited[closest] = true;
 
 		for (i = 0; i < 4; i++) {
@@ -164,14 +163,15 @@ main (int argc, char *argv[]) {
 	int i, j, in = 0;
 	for (i = 0; i < atoi(argv[2]); i++) {
 		for (j = 0; j < atoi(argv[2]); j++) {
-			printf("%d ", in);
+			// printf("%d ", in);
 			fscanf(cost, "%d", &in);
 			cmat[i][j] = in;
 		}
 	}
 	fclose(cost);
 
-	int m, portn = 0;
+	int m = 0;
+	int portn = 0;
 	char nameb[50];
 	char IPb[50];
 	while (!feof(hosts) && m < atoi(argv[2])) {
@@ -207,6 +207,9 @@ main (int argc, char *argv[]) {
 	int sock;
 	if ((sock = socket (PF_INET, SOCK_DGRAM, 0)) == -1) printf("Error creating socket\n");
 
+	int ma;
+	for (ma = 0; ma < 4; ma++) printf( "Machine %s: %s %d\n", myMachines[ma].name, myMachines[ma].IP, myMachines[ma].port );
+
 	while (1) {
 
 		// takes keyboard input
@@ -232,7 +235,7 @@ main (int argc, char *argv[]) {
 			socklen_t addr_size;
 			serverAddr.sin_family = AF_INET;
 			serverAddr.sin_port = htons (myMachines[snode].port); 
-			// printf ( "Sending to port: %d\n", myMachines[snode].port );
+			printf ( "Sending to port: %d\n", myMachines[snode].port );
 			inet_pton (AF_INET, myMachines[snode].IP, &serverAddr.sin_addr.s_addr); // 3rd arg: dest address
 			memset (serverAddr.sin_zero, '\0', sizeof (serverAddr.sin_zero));  
 			addr_size = sizeof(serverAddr);
@@ -241,7 +244,7 @@ main (int argc, char *argv[]) {
 			// send messages
 			printf ("Sending...\n");
 			printf ( "Sending %d\n", msg[2]);
-			if (sendto (sock, &msgToSend, sizeof(msgToSend), 0, (struct sockaddr *)&serverAddr, addr_size) == -1) printf("Sending failed. Please restart\n");
+			if (sendto (sock, &msgToSend, sizeof(msgToSend), 0, (struct sockaddr *)&serverAddr, addr_size) == -1) printf("Sending failed. Restarting\n");
 			printf ("Packet sent.\n");
 		}
 		ct++;
