@@ -92,44 +92,45 @@ void* receive_info(void* ind) {
 
 // thread 3 func
 void* link_state(void* ind) {
-	int myind = (uintptr_t) ind; //0
+	int myind = (uintptr_t) ind; 
 	bool visited[4];
-	visited[myind] = true; 
 	int lc[4];
-	lc[myind] = 0;
 	srand(time(NULL));
 
 	while (1) {
 		pthread_mutex_lock(&myMutex);
 		int i;
-		int min;
-		int closest;
+		int min; 
+		// initiating least cost array and visited array
 		for (i = 0; i < 4; i++) { 
-			if (i != myind) {
-				lc[i] = cmat[myind][i];
-				min = lc[i]; 
-			}
+			lc[i] = cmat[myind][i];
+			visited[i] = false;
+			if (i != myind) min = lc[i]; // min is initiated to distance to one of other nodes
 		}
-
+		visited[myind] = true; 
+		
+	  	// a for loop?
+		int closest = 0;
+		// finding closest node
 		for (i = 0; i < 4; i++) { 
-			if (lc[i] != 0 && lc[i] < min) {
+			if (lc[i] != 0 && lc[i] < min) { // if i != self and lc[i] < min)
 				min = lc[i];
 				closest = i;
 			}
 		}
 
 		printf("Closest: %d, distance from myind %d\n", closest, min);
-		visited[closest] = true;
+		visited[closest] = true; // closest direct node visited
 
-		for (i = 0; i < 4; i++) {
-			// fix this; loop for every other node
-			if (!visited[i]) {
-				if (min + cmat[closest][i] < cmat[myind][i]) {
-					lc[i] = min + cmat[closest][i];
-					visited[i] = true;
-				} 
+		// finding least cost path
+		int j;
+		for (j = 0; j < 4; j++) {
+			if (!visited[j]) {
+				if (lc[closest] + cmat[closest][j] < lc[j]) lc[j] = lc[closest] + cmat[closest][j];
+				visited[j] = true;
 			}
 		}
+
 		pthread_mutex_unlock(&myMutex);
 		// print least costs
 		for (i = 0; i < 4; i++) printf( "Least cost from %d to %d is: %d now \n", myind, i, lc[i]);
@@ -200,8 +201,8 @@ main (int argc, char *argv[]) {
 		printf("Thread creation failed: %d\n", rc3);
 	} 
 
-	printf("Cost table looks like this initially:\n");
-	printHelp(ROW, COL, cmat);
+	// printf("Cost table looks like this initially:\n");
+	// printHelp(ROW, COL, cmat);
 
 	int ct = 0;
 	int sock;
