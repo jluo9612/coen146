@@ -101,38 +101,44 @@ void* link_state(void* ind) {
 	while (1) {
 		pthread_mutex_lock(&myMutex);
 		int i;
-		int min = 0; 
 		// initiating least cost array and visited array
 		for (i = 0; i < 4; i++) { 
 			lc[i] = cmat[myind][i];
 			// printf( "Initial lc: %d\n", lc[i] );
 			visited[i] = false;
-			if (i != myind) {
-				min = lc[i]; // min is initiated to distance to one of other nodes
-			}
 		}
 		visited[myind] = true; 
-		int closest = 0;
-
-		// finding closest node
-		for (i = 0; i < 4; i++) { 
-			if (lc[i] != 0 && lc[i] <= min) { // if i != self and lc[i] < min)
-				min = lc[i];
-				closest = i;
+		
+		// finding least cost path to myind
+		int min_index = 0;
+		int min_d;
+		for (i = 0; i < 4; i++) { // calculate shortest dist to every node
+			int j;
+			min_d = 9999;
+			for (j = 0; j < 4; j++) {
+				if (!visited[j] && lc[j] < min_d) {
+					min_index = j; // updating minindex(closest unvisited neighbor)
+					min_d = lc[j];
+				}
 			}
-		}
-		// printf ( "min: %d\n", min );
+			printf ( "Min_index: %d min_d: %d \n", min_index, min_d );
+			visited[min_index] = true;
 
-		// printf("%d is closest to %d with dist: %d\n", myind, closest, min);
-		visited[closest] = true; // closest direct node visited
+			// int m;
+			// for (m = 0; m < 4; m++) {
+			//	printf ( "%d Visited: %d\n", m, visited[m] );
+			// }
 
-		// finding least cost path
-		int j;
-		for (j = 0; j < 4; j++) {
-			if (!visited[j]) {
-				if (lc[closest] + cmat[closest][j] < lc[j]) lc[j] = lc[closest] + cmat[closest][j];
-				visited[j] = true;
+			for (j = 0; j < 4; j++) { // for each unvisited node
+				if (!visited[j]) { 
+					if (lc[min_index] + cmat[min_index][j] < lc[j]) {
+						lc[j] = lc[min_index] + cmat[min_index][j]; // determine if it's cheaper to go to the unvisited node directly
+						printf ( "lc[%d] from myind is: %d \n", j, lc[j] );
+						// visited[j] = true;
+					}
+				}
 			}
+
 		}
 
 		pthread_mutex_unlock(&myMutex);
